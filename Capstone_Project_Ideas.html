@@ -122,19 +122,27 @@ $(document).ready(function () {
 </div>
 
 
-<div id="predicitng-medical-appointment-no-shows" class="section level3">
-<h3>Predicitng Medical Appointment No-Shows</h3>
-<p>Appointment no-shows are a significant problem in the medical industry. By calculating the probability of a pationt no-show, medical facilities can optimize their bookings to reduce the problems with both under and over-booking.</p>
-<p>Can patient information such as age, time and day scheduled, and health problems, for example, predict the probability of them making their appointments, and provide information that can be used to create a smarter booking system that can reduce the problems associated with more or fewer patients showing up than expected?</p>
+<hr />
+<div id="predicitng-medical-appointment-no-shows" class="section level4">
+<h4>Predicitng Medical Appointment No-Shows</h4>
+<p>Appointment no-shows are a significant problem in the medical industry. By calculating the probability of a pationt no-show, medical facilities can optimize their bookings to reduce the costs of under and over-booking.</p>
+<p>Can patient information such as age and health problems, as well as time of day, be used to predict the probability of them making their appointments, and provide information that can be used to create a smarter booking system that can reduce the problems associated with more or fewer patients showing up than expected?</p>
 <p>The dataset can be found on Kaggle at the following link: <a href="https://www.kaggle.com/joniarroba/noshowappointments" class="uri">https://www.kaggle.com/joniarroba/noshowappointments</a>. The data consists of ~110,000 medical appointments each with 15 variables, including appointment day, day scheduled, age, neighborhood, show or no-show, and patient medical conditions such as hypertension, diabetes, alcoholism, and handicap.</p>
+<hr />
 </div>
-<div id="bikeshare---predicting-usage-to-prevent-bicycle-station-inventory-issues" class="section level3">
-<h3>Bikeshare - Predicting usage to prevent bicycle station inventory issues</h3>
-<p>Bicycles can be rented and returned at stations throughout a city. If a user expects to drop off their bicycle, but the station is full, or if no bicycles are available when the user wants one, it is a major inconvenience for the customer. Bicycles can be redistributed among stations throughout the day to help reduce this problem.</p>
-<p>Can factors such as weather, day of week, time of day, and holiday be used to predict check-out and return rates for a bicycle station, allowing for proactive redistributions?</p>
+<div id="bikeshare---predicting-usage-and-availability" class="section level4">
+<h4>Bikeshare - Predicting Usage and Availability</h4>
+<p>Bikesharing services allow customers to rent and return bicycles at stations throughout a city. There are two possible issues that can cause major inconveniences for the users. If a user expects to drop off their bicycle, but the station is full, or if no bicycles are available when the user wants one.</p>
+<p>There many questions to ask of the data. Can the total ridership be predicted based on weather conditions, day of week, holiday, for example. How commonly do stations run empty or fill up, and which stations does this affect? For a station affected by shortages of bicycles or return space, can the availability of a bike or return space be predicted?</p>
+<p>The bikesharing data is found at <a href="https://www.kaggle.com/benhamner/sf-bay-area-bike-share" class="uri">https://www.kaggle.com/benhamner/sf-bay-area-bike-share</a>. This set contains 4 files: station, status, trip, and weather:</p>
+<p>station: small table that shows name, latitude, longitude, dock count, city, and install date for each of the 70 stations.</p>
+<p>status: List one minute status intervals showing number of bikes and docks available for each of the 70 stations.</p>
+<p>trip: each trip in a two-year period is an obervation, the variables include: start time, end time, start station, end station</p>
+<p>weather: daily weather obersvations for including temperature, humidity, wind speed, and precipitation.</p>
+<hr />
 </div>
-<div id="predicting-income" class="section level3">
-<h3>Predicting Income</h3>
+<div id="predicting-income" class="section level4">
+<h4>Predicting Income</h4>
 <p>There are many uses for determining income level in marketing. This project would explore using demographic variables to predict income class.</p>
 <p>The data can be found at <a href="https://archive.ics.uci.edu/ml/datasets/census+income" class="uri">https://archive.ics.uci.edu/ml/datasets/census+income</a>. The data consists of ~48,000 obeservations of 15 independent variables including age, gender, education, marital status, occupation, hours worked per week, and native country, as well as the dependent variable, which is whether the income level is above $50,000 or not.</p>
 </div>
