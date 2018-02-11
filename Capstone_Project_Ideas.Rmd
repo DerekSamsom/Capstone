@@ -1,0 +1,31 @@
+---
+title: "Capstone Project Ideas"
+output: html_document
+---
+
+
+
+### Predicitng Medical Appointment No-Shows
+
+Appointment no-shows are a significant problem in the medical industry.  By calculating the probability of a pationt no-show, medical facilities can optimize their bookings to reduce the problems with both under and over-booking.
+
+Can patient information such as age, time and day scheduled, and health problems, for example, predict the probability of them making their appointments, and provide information that can be used to create a smarter booking system that can reduce the problems associated with more or fewer patients showing up than expected?
+
+The dataset can be found on Kaggle at the following link: <https://www.kaggle.com/joniarroba/noshowappointments>.
+The data consists of ~110,000 medical appointments each with 15 variables, including appointment day, day scheduled, age, neighborhood, show or no-show, and patient medical conditions such as hypertension, diabetes, alcoholism, and handicap.
+
+
+### Bikeshare - Predicting usage to prevent bicycle station inventory issues
+
+Bikesharing works by allowing customers to rent and return bicycles at stations throughout a city. If a user expects to drop off their bicycle, but the station is full, or if no bicycles are available when the user wants one, it can be a major inconvenience for the customer. Bicycles  can be redistributed among stations throughout the day to help reduce this problem.
+
+Can factors such as weather, day of week, time of day, and holiday be used to predict check-out and return rates for a bicycle station, allowing for proactive redistributions?
+
+This would require using data from the bikesharing system and combining it with weather data. The bikesharing data is found at:
+
+### Predicting Income
+
+There are many uses for determining income level in marketing. This project would explore
+using demographic variables to predict income class.
+
+The data can be found at <https://archive.ics.uci.edu/ml/datasets/census+income>. The data consists of ~48,000 obeservations of 15 independent variables including age, gender, education, marital status, occupation, hours worked per week, and native country, as well as the dependent variable, which is whether the income level is above $50,000 or not.
