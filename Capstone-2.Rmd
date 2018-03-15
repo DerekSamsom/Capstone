@@ -1,0 +1,415 @@
+---
+title: "Capstone"
+output: html_document
+---
+
+
+```{r echo = FALSE, message = FALSE}
+library(readxl)
+library(tidyverse)
+library(caret)
+library(dataMeta)
+library(knitr)
+library(randomForest)
+
+```
+
+Read data and assign to _appointments_
+```{r}
+appointments <- read.csv("Final_Data.csv")
+zipcodes <- read.csv("zipcodes.csv")
+
+```
+
+
+
+### Data Summary and Structure
+
+```{r echo = FALSE}
+summary(appointments)
+str(appointments)
+```
+
+Convert time and date variables to POSIXct
+Convert zip to character
+```{r}
+appointments$time <- as.POSIXct(appointments$time, format = "%H:%M:%S")
+appointments$date <- as.POSIXct(appointments$date, format = "%m/%d/%y")
+appointments$datesched <- as.POSIXct(appointments$datesched, 
+                                     format = "%m/%d/%y")
+###appointments$zip <- as.character(appointments$zip)
+```
+
+Calculating percent of missed appointments overall
+```{r}
+missed_rate <- length(which(appointments$keptstatus == "Missed")) /
+    length(appointments$keptstatus)
+missed_rate
+```
+
+###Build Data Dictionary using dataMeta
+```{r}
+var_desc <- c("Dependent Variable Kept or Missed", "Appointment Date",
+              "Appointment Time", "Appointment Length in Minutes",
+              "Date Appointment was scheduled", "Patient Age", "Patient Gender",
+              "Billing Type", "Number of prior missed appointments",
+              "Number of prior kept appointments",
+              "Patient Distance From Office in Miles",
+              "Office Zip Code - Anonymized","Provider Primary Specialty",
+              "Reminder Call result")
+var_type <- c(1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1)
+linker <- dataMeta::build_linker(appointments, variable_description = var_desc,
+                                 variable_type = var_type)
+dictionary <- dataMeta::build_dict(my.data = appointments, linker = linker,
+                                   option_description = NULL,
+                                   prompt_varopts = FALSE)
+knitr::kable(dictionary, format = "html",
+             caption = "Data Dictionary for Original Dataset")
+```
+
+
+###Data Exploration
+
+#### age
+
+```{r}
+ggplot(appointments, aes(x = age, group = keptstatus, col = keptstatus,
+                         fill = keptstatus)) +
+    geom_histogram(binwidth = 10)
+
+ggplot(data = appointments) +
+    geom_bar(mapping = aes(x = age, fill = keptstatus), position = "fill")
+```
+
+Ranges from 0-264, so there are obviously some impossible values.
+Ratio of missed appointments decreases with age in general.
+
+Removing obervations of ages greater than 100, creating categorical age groups
+and replotting.
+```{r}
+appointments_2 <- appointments %>%
+    filter(age <= 100)
+
+appointments_2 <- appointments_2 %>%
+    mutate(age_cat = cut(age, breaks = c(-1, 10, 20, 30, 40, 50, 60, 70, 101),
+                         labels = c("0-10", "10-20", "20-30", "20-40", "40-50",
+                                    "50-60", "60-70", "Over 70")))
+
+
+ggplot(appointments_2, aes(x = age_cat, group = keptstatus, col = keptstatus,
+                           fill = keptstatus)) +
+    stat_count()
+
+ggplot(data = appointments_2) +
+    geom_bar(mapping = aes(x = age_cat, fill = keptstatus), position = "fill")
+
+ggplot(data = appointments_2, aes(x = keptstatus, y = age)) +
+    geom_boxplot()
+```
+
+
+#### billtype
+```{r}
+table(appointments_2$billtype)
+
+ggplot(data = appointments_2) +
+    geom_bar(mapping = aes(x = billtype, fill = keptstatus), position = "fill")
+
+```
+
+Only one row has _To Be Assigned_ value and will just be removed
+There is a minor difference between billing types
+
+```{r}
+appointments_2 <- subset(appointments_2,
+                           appointments_2$billtype != "To Be Assigned")
+```
+
+
+#### time
+```{r}
+ggplot(data = appointments_2,
+       aes(x = time, group = keptstatus, col = keptstatus, fill = keptstatus)) +
+    geom_histogram(binwidth = 1)
+
+ggplot(data = appointments_2) +
+    geom_bar(mapping = aes(x = time, fill = keptstatus), position = "fill")
+```
+
+Creating new _hour_ variable and replotting
+```{r}
+appointments_2 <- appointments_2 %>%
+    mutate(hour = lubridate::hour(appointments_2$time))
+    
+ggplot(data = appointments_2, 
+       aes(x = hour, group = keptstatus, col = keptstatus, fill = keptstatus)) +
+    geom_histogram(binwidth = 1)
+
+ggplot(data = appointments_2) +
+    geom_bar(mapping = aes(x = hour, fill = keptstatus), position = "fill")
+
+```
+
+Ranges from 00:00:00 to 21:00:00.
+More appointments are missed in the early morning, late afternoon and early
+evening, and around lunchtime, however, there are very few appointments at
+these times. During main scheduling periods, the variation is minor.
+
+
+#### remindresult
+```{r}
+table(appointments_2$remindresult)
+```
+Low counts of "Answered - Cancelled", "Answered - Reschedule", "Busy",
+and "No Answer"
+```{r}
+ggplot(data = appointments_2) +
+    geom_bar(aes(x = remindresult, fill = keptstatus), position = "fill") +
+    theme(axis.text.x = element_text(size = 8, angle = 45,
+                                     hjust = 1, vjust = 1))
+```
+
+Comments: 
+~65% of appointments with "Answered - Cancelled" and ~35% with
+"Answered-Reschedule" still kept their appointments, however, very few
+ observations in these categories.
+ 
+
+
+#### specialty
+```{r}
+table(appointments_2$specialty)
+```
+48 missing values.
+E and F have few observations.
+
+```{r}
+ggplot(data = appointments_2) +
+    geom_bar(aes(x = specialty, fill = keptstatus), position = "fill") +
+    theme(axis.text.x = element_text(size = 7))
+```
+
+C, D, and E provider specialties have lower proportion of missed appointments,
+
+
+#### length
+```{r}
+ggplot(appointments_2, aes(x = length, group = keptstatus, col = keptstatus)) +
+    geom_histogram(binwidth = 10)
+ggplot(data = appointments_2) +
+    geom_bar(mapping = aes(x = length, fill = keptstatus), position = "fill")
+ggplot(data = appointments_2, aes(x = keptstatus, y = length)) +
+    geom_boxplot()
+
+```
+
+#### distance
+```{r}
+ggplot(appointments_2, aes(x = distance, group = keptstatus, col = keptstatus)) +
+    geom_histogram(binwidth = 10)
+ggplot(data = appointments_2) +
+    geom_bar(mapping = aes(x = distance, fill = keptstatus), position = "fill")
+ggplot(data = appointments_2, aes(x = keptstatus, y = distance)) +
+    geom_boxplot()
+
+```
+
+
+Create new variables
+
+percent_missed = percent of prior appointments missed.
+
+```{r}
+appointments_3 <- appointments_2 %>%
+    mutate(missed = ifelse(appointments_2$keptstatus == "Missed", 1,0)) %>%
+    mutate(percent_missed = priormiss / (priormiss + priorkept)) %>%
+    mutate(new = ifelse(appointments_2$priormiss == 0 & appointments_2$priorkept == 0, 1, 0)) %>%
+    mutate(leadtime = as.integer((date - datesched)/86400)) %>% #results are in seconds. Should convert to days for simplicity
+    mutate(weekday = as.factor(strftime(date, "%A")))
+#remove zipcodes$zip <- as.character(zipcodes$zip)
+appointments_3 <- dplyr::left_join(appointments_3, zipcodes, by = "zip")
+str(appointments_3)
+```
+
+#### percent_missed
+
+Create random subset and plot
+```{r}
+appointments_sample_05 <- appointments_3 %>%
+    sample_frac(size = 0.05, replace = FALSE)
+
+ggplot(data = appointments_sample_05, aes(x = percent_missed, y = missed)) +
+    geom_point() +
+    stat_smooth(method = "loess") +
+    xlab("Percent of Prior Appointmens Missed") +
+    ylab("Probability of Missed Appointment")
+ggplot(data = appointments_3, aes(x = keptstatus, y = percent_missed)) +
+    geom_boxplot()
+    
+```
+
+
+
+#### New
+
+```{r}
+table(appointments_3$new)
+
+ggplot(data = appointments_3) +
+    geom_bar(mapping = aes(x = new, fill = keptstatus), position = "fill")
+```
+
+New patients have a very high percentage of kept appointments.
+22k of 342k appointments are first-time, or about 6.4%
+
+#### Time Differential
+
+```{r}
+table(appointments_3$new)
+
+ggplot(data = appointments_3) +
+    geom_bar(mapping = aes(x = leadtime, fill = keptstatus), position = "fill")
+```
+
+#### Size
+```{r}
+table(appointments_3$new)
+
+ggplot(data = appointments_3) +
+    geom_bar(mapping = aes(x = size, fill = keptstatus), position = "fill")
+```
+
+#### County
+```{r}
+table(appointments_3$new)
+
+ggplot(data = appointments_3) +
+    geom_bar(mapping = aes(x = county, fill = keptstatus), position = "fill")
+```
+
+
+
+### Modeling
+
+Create Modeling Data
+```{r}
+mod_data <- appointments_3 #%>%
+mod_data$new <- as.factor(mod_data$new)
+mod_data$percent_missed <- as.integer(mod_data$percent_missed * 100)
+#Replace NAs with mean
+mod_data$percent_missed <- mod_data$percent_missed %>%
+    tidyr::replace_na(mean(mod_data$percent_missed, na.rm = TRUE))
+
+#Check for NAs
+sapply(mod_data, function(x) sum(is.na(x)))
+## Distance hase 972 NA values, will replace with mean
+mod_data$distance <- mod_data$distance %>%
+    tidyr::replace_na(median(mod_data$distance, na.rm = TRUE))
+
+str(mod_data)
+
+```
+
+
+Divide rf_sample into train, validate, and test sets
+```{r}
+
+###split <- sample(3, nrow(rf_sample), replace = TRUE, prob = c(0.60, 0.20, 0.20))
+train <- mod_data[1:205660,]
+validate <- mod_data[205660:274200,]
+test <- mod_data[274201:nrow(mod_data),]
+
+table(train$keptstatus)
+train2 <- train[168738:205660,]
+table(train2$keptstatus)
+train_kept <- train2[train2$keptstatus == "Kept",]
+train_missed <- train[train$keptstatus == "Missed",]
+
+train_balanced <- rbind(train_kept, train_missed)
+table(train_balanced$keptstatus)
+
+```
+
+
+
+
+### Logistic Regression Model
+
+```{r eval = FALSE}
+
+model1 <- caret::train(keptstatus ~ age + remindresult + specialty + billtype + hour + percent_missed + length + gender + distance + new + leadtime + weekday + county, data = train_balanced, method = "glm")
+model1$finalModel
+confusionMatrix(model1)
+##p_glm <- predict(glm, train)
+#caret::confusionMatrix(p_glm, train$kept_status)
+```
+
+
+
+### Random Forest Model
+
+Using randomForest Package
+```{r eval = FALSE}
+rf <- randomForest(keptstatus ~ age + remindresult + specialty + billtype + hour + percent_missed + length + gender + distance + new + leadtime + weekday + county, data = train_balanced, ntree = 250)
+#Takes about 30 seconds to run
+```
+
+
+Using caret Package
+```{r}
+# Look at number of cvs and repeats for faster run-time
+control <- caret::trainControl(method = "repeatedcv", number = 10, repeats = 3)
+seed <- 7
+metric <- "Accuracy"
+set.seed(seed)
+mtry <- 3
+tunegrid <- expand.grid(.mtry = mtry)
+
+#Train on subset to see how long it will take.  Takes ~ 1.5 hours
+```
+
+```{r eval = FALSE}
+rftrain <- caret::train(keptstatus ~ age + remindresult + specialty + billtype + hour + percent_missed + length + gender + distance + new + leadtime + weekday + county, data = train_balanced, method = "rf", metric = metric, tuneGrid = tunegrid, trControl = control)
+```
+
+```{r eval = FALSE}
+caret::confusionMatrix(rftrain)
+```
+
+
+
+```{r}
+control <- caret::trainControl(method = "repeatedcv", number = 10, repeats = 3, search = "random")
+seed <- 7
+metric <- "Accuracy"
+set.seed(seed)
+mtry <- 3
+tunegrid <- expand.grid(.mtry = mtry)
+```
+
+```{r eval = FALSE}
+### Below code takes a long time to run, need to consider ways to shorten it
+rftrain3 <- caret::train(keptstatus ~ age + remindresult + specialty + 
+                         billtype + hour + percent_missed + length + gender +
+                         distance + new + leadtime + weekday + county,
+                         data = train_balanced, method = "rf", metric = metric,
+                         tuneLength = 15, trControl = control)
+```
+
+```{r eval = FALSE}
+print(rftrain2)
+plot(rf)
+varImpPlot(rf)
+varUsed(rf)
+p_rf <- predict(rf, test)
+caret::confusionMatrix(p_rf, test$keptstatus)
+```
+
+
+
+
+
+
+
+
+
