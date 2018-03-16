@@ -1,6 +1,9 @@
 ---
 title: "Capstone"
-output: html_document
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
 ---
 
 
@@ -349,9 +352,14 @@ confusionMatrix(model1)
 ### Random Forest Model
 
 Using randomForest Package
-```{r eval = FALSE}
-rf <- randomForest(keptstatus ~ age + remindresult + specialty + billtype + hour + percent_missed + length + gender + distance + new + leadtime + weekday + county, data = train_balanced, ntree = 250)
+```{r}
+rf <- randomForest(keptstatus ~ age + remindresult + specialty + billtype + hour + percent_missed + length + gender + distance + new + leadtime + weekday + county + size, data = train_balanced, ntree = 250)
 #Takes about 30 seconds to run
+```
+```{r}
+print(rf)
+plot(rf)
+varImpPlot(rf)
 ```
 
 
