@@ -1,8 +1,8 @@
 ---
-title: "Capstone"
+title: "Capstone Project - Predicting Patient No-Shows Using Appointment Data"
 output:
-  word_document: default
   pdf_document: default
+  word_document: default
   html_document: default
 ---
 
@@ -20,7 +20,6 @@ Read data and assign to _appointments_
 ```{r}
 appointments <- read_csv("Final_Data.csv")
 zipcodes <- read_csv("zipcodes.csv")
-
 ```
 
 
@@ -66,12 +65,10 @@ as_data_frame(cbind(c(1:14),variable, variable_description))
 ```
 
 
-Will combine the appointment time and date into one variable, appt_datetime,
-and drop the original variables _appt_date_ and _appt_time_.
+Will combine the appointment time and date into one variable, appt_datetime.
 ```{r}
 
 appointments_2 <- appointments %>%
-    #select(appt_date, appt_time) %>%
     mutate(appt_datetime = lubridate::mdy_hms(paste(appt_date, appt_time)))
 appointments_2$date_scheduled <- as.POSIXct(appointments_2$date_scheduled, 
                                      format = "%m/%d/%y")
@@ -96,12 +93,12 @@ About 16% of the total appointments are missed.
 
 ```{r}
 ggplot(
-    data = appointments_2, 
-    mappng = aes(x = patient_age)
+  data = appointments_2, 
+  mappng = aes(x = patient_age)
 ) +
-    geom_histogram(
-        mapping = aes(x = patient_age, col = kept_status, fill = kept_status),
-        binwidth = 10)
+  geom_histogram(
+    mapping = aes(x = patient_age, col = kept_status, fill = kept_status),
+    binwidth = 10)
 
 ggplot(data = appointments_2) +
     geom_bar(
@@ -275,7 +272,7 @@ ggplot(data = appointments_sample_05, aes(x = percent_missed, y = missed)) +
     stat_smooth(method = "loess") +
     xlab("Percent of Prior Appointmens Missed") +
     ylab("Probability of Missed Appointment")
-ggplot(data = appointments_3, aes(x = keptstatus, y = percent_missed)) +
+ggplot(data = appointments_3, aes(x = kept_status, y = percent_missed)) +
     geom_boxplot()
     
 ```
@@ -288,7 +285,7 @@ ggplot(data = appointments_3, aes(x = keptstatus, y = percent_missed)) +
 table(appointments_3$new)
 
 ggplot(data = appointments_3) +
-    geom_bar(mapping = aes(x = new, fill = keptstatus), position = "fill")
+    geom_bar(mapping = aes(x = new, fill = kept_status), position = "fill")
 ```
 
 New patients have a very high percentage of kept appointments.
@@ -300,7 +297,7 @@ New patients have a very high percentage of kept appointments.
 table(appointments_3$new)
 
 ggplot(data = appointments_3) +
-    geom_bar(mapping = aes(x = leadtime, fill = keptstatus), position = "fill")
+    geom_bar(mapping = aes(x = appt_lead_time, fill = kept_status), position = "fill")
 ```
 
 #### city_size
@@ -308,7 +305,7 @@ ggplot(data = appointments_3) +
 table(appointments_3$new)
 
 ggplot(data = appointments_3) +
-    geom_bar(mapping = aes(x = size, fill = keptstatus), position = "fill")
+    geom_bar(mapping = aes(x = city_size, fill = kept_status), position = "fill")
 ```
 
 #### county_code
@@ -316,7 +313,7 @@ ggplot(data = appointments_3) +
 table(appointments_3$new)
 
 ggplot(data = appointments_3) +
-    geom_bar(mapping = aes(x = county, fill = keptstatus), position = "fill")
+    geom_bar(mapping = aes(x = county_code, fill = kept_status), position = "fill")
 ```
 
 
@@ -338,29 +335,26 @@ model_data[factor_columns] <- lapply(model_data[factor_columns], factor)
 #Check for NAs
 sapply(model_data, function(x) sum(is.na(x)))
 
-
-
 str(model_data)
 
 ```
 
 
-Divide rf_sample into train, validate, and test sets
+Divide model_data into train, validate, and test sets
 ```{r}
 
-###split <- sample(3, nrow(rf_sample), replace = TRUE, prob = c(0.60, 0.20, 0.20))
 train <- model_data[1:205660,]
 validate <- model_data[205660:274200,]
 test <- model_data[274201:nrow(model_data),]
 
-table(train$keptstatus)
+table(train$kept_status)
 train2 <- train[168738:205660,]
 table(train2$keptstatus)
-train_kept <- train2[train2$keptstatus == "Kept",]
-train_missed <- train[train$keptstatus == "Missed",]
+train_kept <- train2[train2$kept_status == "Kept",]
+train_missed <- train[train$kept_status == "Missed",]
 
 train_balanced <- rbind(train_kept, train_missed)
-table(train_balanced$keptstatus)
+table(train_balanced$kept_status)
 
 ```
 
@@ -371,7 +365,7 @@ table(train_balanced$keptstatus)
 
 ```{r eval = FALSE}
 
-model1 <- caret::train(keptstatus ~ age + remindresult + specialty + billtype + hour + percent_missed + length + gender + distance + new + leadtime + weekday + county, data = train_balanced, method = "glm")
+model1 <- caret::train(kept_status ~ age + remindresult + specialty + billtype + hour + percent_missed + length + gender + distance + new + leadtime + weekday + county, data = train_balanced, method = "glm")
 model1$finalModel
 confusionMatrix(model1)
 ##p_glm <- predict(glm, train)
@@ -384,7 +378,7 @@ confusionMatrix(model1)
 
 Using randomForest Package
 ```{r}
-rf <- randomForest(keptstatus ~ age + remindresult + specialty + billtype + hour + percent_missed + length + gender + distance + new + leadtime + weekday + county + size, data = train_balanced, ntree = 250)
+rf <- randomForest(kept_status ~ patient_age + remind_call_result + provider_specialty + billing_type + hour + percent_missed + appt_length + patient_gender + patient_distance + new + appt_lead_time + weekday + county_code + city_size, data = train_balanced, ntree = 250)
 #Takes about 30 seconds to run
 ```
 ```{r}
