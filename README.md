@@ -17,8 +17,6 @@ Capstone.Rproj - R Project file for Capstone Project
 
 
 
-
-
 Files absent from this repository:
 
 "Final_Data.csv"  

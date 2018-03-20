@@ -13,7 +13,6 @@ library(lubridate)
 library(caret)
 library(randomForest)
 library(GGally)
-
 ```
 
 Read data and assign to _appointments_
@@ -61,7 +60,7 @@ variable_description <- c(
     "Reminder Call result")
 variable <- colnames(appointments)
               
-as_data_frame(cbind(c(1:14),variable, variable_description))
+as_data_frame(cbind(c(1:length(variable)),variable, variable_description))
 ```
 
 
@@ -182,9 +181,13 @@ Low counts of "Answered - Cancelled", "Answered - Reschedule", "Busy",
 and "No Answer"
 ```{r}
 ggplot(data = appointments_2) +
-    geom_bar(aes(x = remind_call_result, fill = kept_status), position = "fill") +
-    theme(axis.text.x = element_text(size = 8, angle = 45,
-                                     hjust = 1, vjust = 1))
+    geom_bar(
+        mapping = aes(x = remind_call_result, fill = kept_status),
+        position = "fill"
+) +
+    theme(
+        axis.text.x = element_text(size = 8, angle = 45,
+        hjust = 1, vjust = 1))
 ```
 
 ~65% of appointments with "Answered - Cancelled" and ~35% with
@@ -194,15 +197,20 @@ ggplot(data = appointments_2) +
 
 
 #### provider_specialty
-```{r}
-table(appointments_2$provider_specialty)
-```
-48 missing values.
-E and F have few observations.
 
 ```{r}
+ggplot(
+    data = appointments_2,
+    mapping = aes(x = provider_specialty, col = kept_status, fill = kept_status)
+) +
+    stat_count()
+
+
 ggplot(data = appointments_2) +
-    geom_bar(aes(x = provider_specialty, fill = kept_status), position = "fill") +
+    geom_bar(
+        mapping = aes(x = provider_specialty, fill = kept_status),
+        position = "fill"
+) +
     theme(axis.text.x = element_text(size = 7))
 ```
 
@@ -211,12 +219,25 @@ C, D, and E provider specialties have lower proportion of missed appointments,
 
 #### appt_length
 ```{r}
-ggplot(appointments_2, aes(x = appt_length, group = kept_status, col = kept_status)) +
+ggplot(
+    data = appointments_2,
+    mapping = aes(x = appt_length, col = kept_status, fill = kept_status)
+) +
     geom_histogram(binwidth = 10)
+```
+Most Appointments appear to be 60 minutes long. 30-minute appointments are next most popular.
+
+
+
+
+```{r}
+appointments_2 <- appointments_2 %>% 
+    mutate(length_group = cut(appt_length, breaks = c(-1, 45, 75, 1000), labels = c("Short", "Medium", "Long")))
+
 ggplot(data = appointments_2) +
-    geom_bar(mapping = aes(x = appt_length, fill = kept_status), position = "fill")
-ggplot(data = appointments_2, aes(x = kept_status, y = appt_length)) +
-    geom_boxplot()
+    geom_bar(mapping = aes(x = length_group, fill = kept_status), position = "fill")
+
+
 
 ```
 
@@ -224,13 +245,12 @@ ggplot(data = appointments_2, aes(x = kept_status, y = appt_length)) +
 ```{r}
 ggplot(appointments_2, aes(x = patient_distance, group = kept_status, col = kept_status)) +
     geom_histogram(binwidth = 10)
-ggplot(data = appointments_2) +
-    geom_bar(mapping = aes(x = patient_distance, fill = kept_status), position = "fill")
-ggplot(data = appointments_2, aes(x = kept_status, y = patient_distance)) +
-    geom_boxplot()
+
 
 ```
+
 patient_distance is very right-skewed, therefore NA values will be replaced with median rather than mean.
+
 ```{r}
 appointments_2$patient_distance <- appointments_2$patient_distance %>%
     tidyr::replace_na(median(appointments_2$patient_distance, na.rm = TRUE))
@@ -249,7 +269,7 @@ and the day of the appointment.
 appointments_3 <- appointments_2 %>%
     mutate(percent_missed = prior_missed / (prior_missed + prior_kept)) %>%
     mutate(new = ifelse(appointments_2$prior_missed == 0 & appointments_2$prior_kept == 0, 1, 0)) %>%
-    mutate(appt_lead_time = appt_datetime - date_scheduled) %>% 
+    mutate(appt_lead_time = date(appt_datetime) - date(date_scheduled)) %>% 
     mutate(weekday = strftime(appt_datetime, "%A"))
 ```
 
@@ -257,21 +277,12 @@ appointments_3 <- appointments_2 %>%
 Add city_size and county_code from zipcode data.
 ```{r}
 appointments_3 <- dplyr::left_join(appointments_3, zipcodes, by = "office_zip")
-str(appointments_3)
 ```
 
 #### percent_missed
 
 Create random subset and plot
 ```{r}
-appointments_sample_05 <- appointments_3 %>%
-    sample_frac(size = 0.05, replace = FALSE)
-
-ggplot(data = appointments_sample_05, aes(x = percent_missed, y = missed)) +
-    geom_point() +
-    stat_smooth(method = "loess") +
-    xlab("Percent of Prior Appointmens Missed") +
-    ylab("Probability of Missed Appointment")
 ggplot(data = appointments_3, aes(x = kept_status, y = percent_missed)) +
     geom_boxplot()
     
@@ -294,15 +305,12 @@ New patients have a very high percentage of kept appointments.
 #### appt_lead_time
 
 ```{r}
-table(appointments_3$new)
-
-ggplot(data = appointments_3) +
-    geom_bar(mapping = aes(x = appt_lead_time, fill = kept_status), position = "fill")
+ggplot(appointments_3, aes(x = appt_lead_time, col = kept_status, fill = kept_status)) +
+    geom_histogram(binwidth = 10)
 ```
 
 #### city_size
 ```{r}
-table(appointments_3$new)
 
 ggplot(data = appointments_3) +
     geom_bar(mapping = aes(x = city_size, fill = kept_status), position = "fill")
@@ -310,11 +318,16 @@ ggplot(data = appointments_3) +
 
 #### county_code
 ```{r}
-table(appointments_3$new)
-
 ggplot(data = appointments_3) +
     geom_bar(mapping = aes(x = county_code, fill = kept_status), position = "fill")
 ```
+
+```{r}
+#appointments_sample_025 <- appointments_3 %>%
+#   sample_frac(size = 0.025, replace = FALSE)
+#ggpairs(data = appointments_sample_05[,20:24], cardinality_threshold = 50)
+```
+
 
 
 
@@ -329,8 +342,8 @@ model_data$percent_missed <- as.integer(model_data$percent_missed * 100)
 model_data$percent_missed <- model_data$percent_missed %>%
     tidyr::replace_na(mean(model_data$percent_missed, na.rm = TRUE))
 factor_columns <- c("kept_status", "patient_gender", "billing_type", 
-"office_zip", "provider_specialty", "remind_call_result", "weekday",
-"county_code")
+"office_zip", "provider_specialty", "remind_call_result", "hour", "weekday",
+"county_code", "length_group")
 model_data[factor_columns] <- lapply(model_data[factor_columns], factor)
 #Check for NAs
 sapply(model_data, function(x) sum(is.na(x)))
@@ -391,7 +404,7 @@ varImpPlot(rf)
 Using caret Package
 ```{r}
 # Look at number of cvs and repeats for faster run-time
-control <- caret::trainControl(method = "repeatedcv", number = 10, repeats = 3)
+control <- caret::trainControl(method = "cv", number = 3, allowParallel = TRUE)
 seed <- 7
 metric <- "Accuracy"
 set.seed(seed)
@@ -402,7 +415,7 @@ tunegrid <- expand.grid(.mtry = mtry)
 ```
 
 ```{r eval = FALSE}
-rftrain <- caret::train(keptstatus ~ age + remindresult + specialty + billtype + hour + percent_missed + length + gender + distance + new + leadtime + weekday + county, data = train_balanced, method = "rf", metric = metric, tuneGrid = tunegrid, trControl = control)
+rftrain <- caret::train(kept_status ~ patient_age + remind_call_result + provider_specialty + billing_type + hour + percent_missed + appt_length + patient_gender + patient_distance + new + appt_lead_time + weekday + county_code + city_size, data = train_balanced, method = "rf", metric = metric, tuneGrid = tunegrid, trControl = control)
 ```
 
 ```{r eval = FALSE}
@@ -412,7 +425,7 @@ caret::confusionMatrix(rftrain)
 
 
 ```{r}
-control <- caret::trainControl(method = "repeatedcv", number = 10, repeats = 3, search = "random")
+control <- caret::trainControl(method = "oob", number = 10, repeats = 3, search = "random")
 seed <- 7
 metric <- "Accuracy"
 set.seed(seed)
