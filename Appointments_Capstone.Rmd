@@ -12,9 +12,9 @@ Missed medical appointments are a major problem in the medical industry, resulti
 
 This  project is a classification problem that will explore the prediction of whether a medical appointment will be missed, and its probability of being kept or missed. The prediction error will result in  times where there are too many or too few patients at a given time. The main goal in the prediction will be to minimize the error, as this will reduce instances of having more or fewer patients that desired.
 
-There are countless reasons and circumstances that can lead someone to miss an appointment, such as a last minute work meeting or a family emergency, that aren't directly captured in the data and are impossible to know in advance. Missed appointments can only be predicted based based on indirect factors that are known, such as past history as demographics. Because of this, there will be a level of error that cannot be eliminated, however, any reduction in error compared to having no predictive model at all is still beneficial.
+There are countless reasons and circumstances that can lead someone to miss an appointment, such as a last minute work meeting or a family emergency, that aren't directly captured in the data and are impossible to know in advance. Missed appointments can only be predicted based on indirect factors that are known, such as past history as demographics. Because of this, there will be a level of error that cannot be eliminated, however, any reduction in error compared to having no predictive model at all is still beneficial.
 
-Medical providers can used the missed appointment predistions by incorporating them into their booking methods and systems. The methods used in booking will have to consider the implications of the inherent prediction errors and balance the risk the errors represent: too many patients leading to staff/resourse shortage, and too few patients leading to lost revenue.  The methods of implementing the use of missed appointentment predictions into an appointment booking system are client-specific ant not included in the scope of this project, which is limited to minimizing the error while predicting the probability that an appointment will be missed or kept.
+Medical providers can used the missed appointment predistions by incorporating them into their booking methods and systems. The methods used in booking will have to consider the implications of the inherent prediction errors and balance the risk the errors represent: too many patients leading to staff/resource shortage, and too few patients leading to lost revenue.  The methods of implementing the use of missed appointentment predictions into an appointment booking system are client-specific ant not included in the scope of this project, which is limited to minimizing the error while predicting the probability that an appointment will be missed or kept.
 
 
 
@@ -457,7 +457,7 @@ model_data <- model_data %>%
 
 ### Divide model_data into train, validate, and test sets
 
-The data will be dividied into three sets: train, validate, and test. I will use 60% of the tata for training, and 20% each for validation and test.
+The data will be divided into three sets: train, validate, and test. I will use 60% of the tata for training, and 20% each for validation and test.
 
 Because the data is arranged in a time-series, I want to use the most recent data for the test data, the next oldest for validation, and the oldest for training. Since I am trying to predict future appointments, testing on the most recent data will result in the best measure of the model's performance.
 
@@ -474,7 +474,6 @@ train_missed <- train[train$kept_status == "Missed",]
 train_balanced <- rbind(train_kept, train_missed)
 table(train_balanced$kept_status)
 
-
 ```
 
 
@@ -483,9 +482,30 @@ table(train_balanced$kept_status)
 ### Logistic Regression Model
 
 ```{r}
+glm_control <- caret::trainControl(method = "none")
 
-glm_train <- caret::train(
-    kept_status ~ ., data = train_balanced, method = "glm")
+glm_model <- caret::train(
+    kept_status ~ .,
+    data = train_balanced,
+    method = "glm",
+    trControl = glm_control
+)
+
+summary(glm_model)
+
+dummy_vars <- caret::dummyVars(~ ., data = train_balanced)
+
+train_balanced_dummy <- data.frame(predict(dummy_vars, newdata = train_balanced))
+
+cor(train_balanced_dummy)
+
+linear_combos <- caret::findLinearCombos(train_balanced_dummy)
+
+linear_combos$remove
+
+
+
+
 ```
 
 
