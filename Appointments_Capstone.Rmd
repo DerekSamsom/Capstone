@@ -3,7 +3,6 @@ title: "Capstone Project - Predicting Patient No-Shows Using Appointment Data"
 author: "Derek Samsom"
 output:
   pdf_document: default
-  word_document: default
 ---
 
 
@@ -109,7 +108,7 @@ missed_rate <- mean(appointments$missed)
 missed_rate
 ```
 
-`r round(missed_rate, digits = 4) * 100`% of the total appointments are missed. This is an imbalanced classification, which will have implications in the modeling. For example, the model could predict all of the appointments will be kept and be correct `r 100 -(round(missed_rate, digits = 4) * 100)`% of the time. This results in a high accuracy without providing any useful prediction of which appointments will be missed. 
+`r round(missed_rate, digits = 4) * 100` % of the total appointments are missed. This is an imbalanced classification, which will have implications in the modeling. For example, the model could predict all of the appointments will be kept and be correct `r 100 - (round(missed_rate, digits = 4) * 100)` % of the time. This results in a high accuracy without providing any useful prediction of which appointments will be missed. 
 
 
 
@@ -268,14 +267,16 @@ C, D, and E provider specialties have lower proportion of missed appointments.
 ### appt_length
 
 ```{r}
-ggplot(
-    data = appointments,
-    mapping = aes(x = appt_length, col = kept_status, fill = kept_status)
-) +
-    geom_histogram(binwidth = 10)
+
+appointments %>%
+    filter(appt_length < 150) %>%
+    ggplot(
+        aes(x = appt_length, color = kept_status, fill = kept_status)
+    ) +
+            geom_histogram(binwidth = 10)
 ```
 Most Appointments are 60 minutes long. 30-minute appointments are next most
-popular.
+common.
 
 
 ```{r}
@@ -299,11 +300,12 @@ ggplot(
 
 ### patient_distance
 ```{r}
-ggplot(
-    data = appointments,
-    aes(x = patient_distance, group = kept_status, col = kept_status)
-) +
-    geom_histogram(binwidth = 10)
+appointments %>%
+    filter(patient_distance < 50) %>%
+    ggplot(
+        aes(x = patient_distance, color = kept_status, fill = kept_status)
+    ) +
+            geom_histogram(binwidth = 5)
 
 
 ```
@@ -374,21 +376,33 @@ ggplot(
     aes(x = is_new_patient, fill = kept_status)
 ) +
     geom_bar()
+
 ```
 
 New patients have a very high percentage of kept appointments.
-22,000 of 342,000 appointments are first-time, or about 6.4%
+
 
 
 ### appt_lead_time
 
+
 ```{r}
-ggplot(
-    appointments,
-    aes(x = appt_lead_time, col = kept_status, fill = kept_status)
-) +
-    geom_histogram(binwidth = 10)
+appointments %>%
+    filter(appt_lead_time >= 0 & appt_lead_time < 400) %>%
+    ggplot(
+        aes(x = appt_lead_time, color = kept_status, fill = kept_status)
+    ) +
+            geom_histogram(binwidth = 10)
+
+appointments %>%
+    filter(appt_lead_time >= 0 & appt_lead_time < 400) %>%
+    ggplot(
+        aes(x = appt_lead_time, color = kept_status, fill = kept_status)
+    ) +
+            geom_bar(position = "fill")
 ```
+
+There is a lower proportion of missed appointments among those with the shortest lead times. This backs up my theory that shorter lead times could indicate more urgent health matters. Also, there are small bumps in the histogram around 180 and 360 days, which is probably indicitive of regular 6-month and 12-month checkups.
 
 
 ### county_code
@@ -452,6 +466,27 @@ model_data <- model_data %>%
         percent_missed, is_new_patient, appt_lead_time, appt_weekday,
         weekday_scheduled, county_code)
 
+table(model_data$provider_specialty)
+model_data$provider_specialty <- model_data$provider_specialty %>%
+    fct_collapse(Other = c("E", "F", "G"))
+
+table(model_data$provider_specialty)
+
+
+
+model_data$hour <- model_data$hour %>%
+    fct_collapse(Other = c("0", "5", "6", "7", "12", "17", "18", "19", "20", "21"))
+
+
+model_data <- model_data %>%
+    filter(county_code != "D") %>%
+    filter(weekday_scheduled != "Sunday")
+
+model_data <- droplevels(model_data)
+
+
+
+
 ```
 
 
@@ -459,18 +494,19 @@ model_data <- model_data %>%
 
 The data will be divided into three sets: train, validate, and test. I will use 60% of the tata for training, and 20% each for validation and test.
 
-Because the data is arranged in a time-series, I want to use the most recent data for the test data, the next oldest for validation, and the oldest for training. Since I am trying to predict future appointments, testing on the most recent data will result in the best measure of the model's performance.
+Because the data is sorted by date, I want to use the most recent data for the test data, the next oldest for validation, and the oldest for training. Since I am trying to predict future appointments, testing on the most recent data will result in the best measure of the model's performance.
 
 ```{r}
+
+# check out caret::downSample
 train <- model_data[1:205660,]
 validate <- model_data[205661:274200,]
 test <- model_data[274201:nrow(model_data),]
 table(train$kept_status)
-train_balance_subset <- train[168736:205660,]
+train_balance_subset <- train[168735:205660,]
 table(train_balance_subset$kept_status)
 train_kept <- train_balance_subset[train_balance_subset$kept_status == "Kept",]
 train_missed <- train[train$kept_status == "Missed",]
-# check out caret::downSample
 train_balanced <- rbind(train_kept, train_missed)
 table(train_balanced$kept_status)
 
@@ -492,41 +528,46 @@ glm_model <- caret::train(
 )
 
 summary(glm_model)
+```
 
+
+Linear Combos
+```{r}
 dummy_vars <- caret::dummyVars(~ ., data = train_balanced)
 
 train_balanced_dummy <- data.frame(predict(dummy_vars, newdata = train_balanced))
 
-cor(train_balanced_dummy)
+
 
 linear_combos <- caret::findLinearCombos(train_balanced_dummy)
-
 linear_combos$remove
-
-
-
-
+lin_combo_index <- linear_combos$remove
+colnames(train_balanced_dummy[,lin_combo_index])
 ```
+
+
+Correlation
+```{r}
+cor_matrix <- cor(train_balanced_dummy)
+high_cor <- as.data.frame(which(abs(cor_matrix) > 0.90, arr.ind = TRUE))
+index <- high_cor %>% filter(row != col)
+
+cor_matrix <- cor(train_balanced_dummy)
+cor_matrix[index[,1], index[, 2]]
+
+colnames(train_balanced_dummy[index[,1], index[, 2]])
+```
+
 
 
 
 ### Random Forest Model
 
-Using randomForest Package (To be removed in final report)
-```{r}
-rf <- randomForest(kept_status ~ ., data = train_balanced, ntree = 250)
-
-print(rf)
-plot(rf)
-varImpPlot(rf)
-```
-
 
 
 Using caret Package
 ```{r}
-# Try adding classProbs = TRUE
-control <- caret::trainControl(method = "cv", number = 2, classProbs = TRUE)
+rf_control <- caret::trainControl(method = "cv", number = 2, classProbs = TRUE)
 seed <- 7
 metric <- "Accuracy"
 set.seed(seed)
@@ -535,17 +576,17 @@ tunegrid <- expand.grid(.mtry = mtry)
 ```
 
 ```{r}
-rftrain <- caret::train(
+rf_model <- caret::train(
     kept_status ~ ., data = train_balanced, method = "rf", metric = metric,
-    tuneGrid = tunegrid, trControl = control)
+    tuneGrid = tunegrid, trControl = rf_control)
 ```
 
 
 ### Model Comparison
 
-```{r eval = FALSE}
-caret::confusionMatrix(glm_train)
-pred_glm <- predict(glm_train, validate)
+```{r}
+
+pred_glm <- predict(glm_model, validate)
 
 conf_mat_glm <- caret::confusionMatrix(
     pred_glm, validate$kept_status, positive = "Missed")
@@ -557,9 +598,9 @@ conf_mat_glm$byClass["F1"]
 
 
 
-pred_rf <-predict(rftrain, validate)
+pred_rf <-predict(rf_model, validate)
 
-caret::confusionMatrix(rftrain)
+caret::confusionMatrix(rf_model)
 
 conf_mat_rf <- caret::confusionMatrix(
     pred_rf, validate$kept_status, positive = "Missed")
@@ -567,7 +608,7 @@ conf_mat_rf <- caret::confusionMatrix(
 conf_mat_rf
 
 conf_mat_rf$byClass["F1"]
-###glm currently performing slightly better than rf on validation data based on F1 score
+
 
 ```
 
