@@ -77,8 +77,9 @@ variable_descriptions <- c(
     "Provider primary specialty code",
     "Reminder Call result")
 variable <- colnames(appointments)
-              
-as_data_frame(cbind(c(1:length(variable)), variable, variable_descriptions))
+variable_type <- unlist(map(appointments, class))  
+variable_type <- variable_type[-4]
+as_data_frame(cbind(c(1:length(variable)), variable, variable_type, variable_descriptions))
 ```
 
 
@@ -96,8 +97,7 @@ appointments$date_scheduled <- lubridate::as_date(
 ## Data Exploration
 
 
-First I want to calculate the percent of missed appointments overall by creating a logical variable `missed`, where 1 represents a missed appointment and 0
-represents a kept appointment. This will determine the degree of class imbalance.
+First I want to calculate the percent of missed appointments overall by creating a logical variable `missed`, where 1 represents a missed appointment and 0 represents a kept appointment. This will determine the degree of class imbalance.
 
 
 
@@ -191,12 +191,12 @@ appointments <- appointments %>%
 table(appointments$hour)
 ```
 
-Most appointments are scheduled between 8:00 AM and 5:00 PM, with an hour gap starting at 12:00.
+Most appointments are scheduled between 8:00 AM and 5:00 PM, with a one hour gap starting at 12:00. 
 
 ```{r}
 appointments_hour <- appointments %>%
     select(kept_status, hour) %>%   
-    filter(hour >= 8 & hour <= 17)
+    filter(hour >= 8 & hour <= 16)
 
 ggplot(
     appointments_hour,
@@ -243,9 +243,17 @@ ggplot(
  
 
 
-### provider_specialty  (Should I even include this in the report? not as interesting since I have the specialties encoded)
+### provider_specialty 
 
 ```{r}
+table(appointments$provider_specialty)
+```
+Most observations are specialty A and B. Specialties E, F, and G have very few observations and will be grouped as "Other".
+```{r}
+appointments$provider_specialty <- appointments$provider_specialty %>%
+    fct_collapse(Other = c("E", "F", "G"))
+
+
 ggplot(
     appointments,
     aes(x = provider_specialty, col = kept_status, fill = kept_status)
@@ -261,7 +269,7 @@ ggplot(
     theme(axis.text.x = element_text(size = 7))
 ```
 
-C, D, and E provider specialties have lower proportion of missed appointments.
+
 
 
 ### appt_length
@@ -280,15 +288,19 @@ common.
 
 
 ```{r}
-length_breaks <- c(-1, 45, 75, 1000)
 
-length_labels <- c("Short", "Medium", "Long")
+length_breaks <- c(-1, 29, 30, 59, 60, 1000)
+
+length_labels <- c("Other1", "30 Min", "Other2", "60 Min", "Other3")
 
 appointments <- appointments %>% 
     mutate(
         length_group = cut(
             appt_length, breaks = length_breaks, labels = length_labels)
         )
+
+appointments$length_group <- appointments$length_group %>%
+    fct_collapse(Other = c("Other1", "Other2", "Other3"))
 
 ggplot(
     data = appointments,
@@ -387,6 +399,15 @@ New patients have a very high percentage of kept appointments.
 
 
 ```{r}
+length(which(appointments$appt_lead_time < 0))
+```
+
+There are `r length(which(appointments$appt_lead_time < 0))` negative values, indicating observations that suggest the appointment was booked after it occurred. THis is an impossible value and must represent entry errors, but the number is small.  These will be replaced with 0.
+
+
+```{r}
+appointments$appt_lead_time <- ifelse(appointments$appt_lead_time < 0, 0, appointments$appt_lead_time)
+
 appointments %>%
     filter(appt_lead_time >= 0 & appt_lead_time < 400) %>%
     ggplot(
@@ -399,10 +420,10 @@ appointments %>%
     ggplot(
         aes(x = appt_lead_time, color = kept_status, fill = kept_status)
     ) +
-            geom_bar(position = "fill")
+            geom_bar(binwidth = 10, position = "fill")
 ```
 
-There is a lower proportion of missed appointments among those with the shortest lead times. This backs up my theory that shorter lead times could indicate more urgent health matters. Also, there are small bumps in the histogram around 180 and 360 days, which is probably indicitive of regular 6-month and 12-month checkups.
+There is a lower proportion of missed appointments among those with the shortest lead times. This backs up my theory that shorter lead times could indicate more urgent health matters which I wouldn't expect a patient to be as likely to skip. Also, there are small bumps in the histogram around 180 and 360 days, which is probably indicitive of regular 6-month and 12-month checkups.
 
 
 ### county_code
@@ -415,30 +436,49 @@ ggplot(
     geom_bar(position = "fill")
 ```
 
-```{r}
-#appointments_sample_025 <- appointments_3 %>%
-#   sample_frac(size = 0.025, replace = FALSE)
-#ggpairs(data = appointments_sample_05[,20:24], cardinality_threshold = 50)
-```
 
 ### appt_weekday
 
 ```{r}
+table(appointments$appt_weekday)
+```
+
+There are only 12 Sunday appointments, so I will remove the observations. I will also convert the character variable to an ordered factor to see the days of the week in the correct order.
+
+
+```{r}
+appointments <- appointments %>%
+    filter(appt_weekday != "Sunday")
+
+
+appointments$appt_weekday <- factor(appointments$appt_weekday, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
+
+
 ggplot(
     appointments,
-    aes(x = appt_weekday, fill = kept_status)
+    aes(x = appt_weekday, color = kept_status, fill = kept_status)
 ) +
-    geom_bar(position = "fill")
+    geom_bar()
 ```
 
 ### weekday_scheduled
 
 ```{r}
+table(appointments$weekday_scheduled)
+```
+
+```{r}
+appointments <- appointments %>%
+    filter(weekday_scheduled != "Sunday") %>%
+    filter(weekday_scheduled != "Saturday")
+
+appointments$weekday_scheduled <- factor(appointments$weekday_scheduled, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
+
 ggplot(
     appointments,
     aes(x = weekday_scheduled, fill = kept_status)
 ) +
-    geom_bar(position = "fill")
+    geom_bar()
 ```
 
 
@@ -449,41 +489,51 @@ ggplot(
 ### Create Modeling Data
 
 ```{r}
-model_data <- appointments
 
-factor_columns <- c(
-    "kept_status", "patient_gender", "billing_type", "office_zip",
-    "provider_specialty", "remind_call_result", "hour", "is_new_patient",
-    "appt_weekday", "weekday_scheduled",
-    "county_code")
-model_data[factor_columns] <- lapply(model_data[factor_columns], factor)
-
-
-model_data <- model_data %>%
+model_data <- appointments %>%
     select(
         kept_status, appt_length, patient_age, patient_gender, billing_type, 
         patient_distance, provider_specialty, remind_call_result, hour,
         percent_missed, is_new_patient, appt_lead_time, appt_weekday,
         weekday_scheduled, county_code)
 
-table(model_data$provider_specialty)
-model_data$provider_specialty <- model_data$provider_specialty %>%
-    fct_collapse(Other = c("E", "F", "G"))
 
-table(model_data$provider_specialty)
+factor_columns <- c(
+    "kept_status", "patient_gender", "billing_type",
+    "provider_specialty", "remind_call_result", "hour", "is_new_patient",
+    "appt_weekday", "weekday_scheduled",
+    "county_code")
+model_data[factor_columns] <- map(model_data[factor_columns], factor)
+
+dummy_vars <- caret::dummyVars(~ ., data = model_data)
+
+model_data_dummy <- data.frame(predict(dummy_vars, newdata = model_data))
+```
+
+```{r}
+linear_combos <- caret::findLinearCombos(model_data_dummy)
+linear_combos$remove
+lin_combo_index <- linear_combos$remove
+
+model_data_dummy <- model_data_dummy[,-linear_combos$remove]
 
 
+cor_matrix <- cor(model_data_dummy)
+high_cor <- as.data.frame(which(abs(cor_matrix) > 0.90, arr.ind = TRUE))
+index <- high_cor %>% filter(row != col)
 
-model_data$hour <- model_data$hour %>%
-    fct_collapse(Other = c("0", "5", "6", "7", "12", "17", "18", "19", "20", "21"))
+
+cor_matrix[index[, 1], index[, 2]]
+
+colnames(model_data_dummy[index[,1], index[, 2]])
 
 
-model_data <- model_data %>%
-    filter(county_code != "D") %>%
-    filter(weekday_scheduled != "Sunday")
+model_data_dummy <- model_data_dummy[,-c(2, 6, 11)]
 
-model_data <- droplevels(model_data)
+model_data_dummy$kept_status.Kept <- as.factor(model_data_dummy$kept_status.Kept)
 
+near_zero_var <- caret::nearZeroVar(model_data_dummy)
+model_data_dummy <- model_data_dummy[,-near_zero_var]
 
 
 
@@ -499,21 +549,21 @@ Because the data is sorted by date, I want to use the most recent data for the t
 ```{r}
 
 # check out caret::downSample
-train <- model_data[1:205660,]
-validate <- model_data[205661:274200,]
-test <- model_data[274201:nrow(model_data),]
-table(train$kept_status)
-train_balance_subset <- train[168735:205660,]
-table(train_balance_subset$kept_status)
-train_kept <- train_balance_subset[train_balance_subset$kept_status == "Kept",]
-train_missed <- train[train$kept_status == "Missed",]
+train <- model_data_dummy[1:205660,]
+validate <- model_data_dummy[205661:274200,]
+test <- model_data_dummy[274201:nrow(model_data_dummy),]
+table(train$kept_status.Kept)
+train_balance_subset <- train[168750:205660,]
+table(train_balance_subset$kept_status.Kept)
+train_kept <- train_balance_subset[train_balance_subset$kept_status.Kept == 1,]
+train_missed <- train[train$kept_status.Kept == 0,]
 train_balanced <- rbind(train_kept, train_missed)
-table(train_balanced$kept_status)
+table(train_balanced$kept_status.Kept)
 
 ```
 
 
-
+###need to fix negative appt lead time
 
 ### Logistic Regression Model
 
@@ -521,7 +571,7 @@ table(train_balanced$kept_status)
 glm_control <- caret::trainControl(method = "none")
 
 glm_model <- caret::train(
-    kept_status ~ .,
+    kept_status.Kept ~ .,
     data = train_balanced,
     method = "glm",
     trControl = glm_control
@@ -531,35 +581,6 @@ summary(glm_model)
 ```
 
 
-Linear Combos
-```{r}
-dummy_vars <- caret::dummyVars(~ ., data = train_balanced)
-
-train_balanced_dummy <- data.frame(predict(dummy_vars, newdata = train_balanced))
-
-
-
-linear_combos <- caret::findLinearCombos(train_balanced_dummy)
-linear_combos$remove
-lin_combo_index <- linear_combos$remove
-colnames(train_balanced_dummy[,lin_combo_index])
-```
-
-
-Correlation
-```{r}
-cor_matrix <- cor(train_balanced_dummy)
-high_cor <- as.data.frame(which(abs(cor_matrix) > 0.90, arr.ind = TRUE))
-index <- high_cor %>% filter(row != col)
-
-cor_matrix <- cor(train_balanced_dummy)
-cor_matrix[index[,1], index[, 2]]
-
-colnames(train_balanced_dummy[index[,1], index[, 2]])
-```
-
-
-
 
 ### Random Forest Model
 
@@ -567,7 +588,7 @@ colnames(train_balanced_dummy[index[,1], index[, 2]])
 
 Using caret Package
 ```{r}
-rf_control <- caret::trainControl(method = "cv", number = 2, classProbs = TRUE)
+rf_control <- caret::trainControl(method = "cv", number = 2, classProbs = FALSE)
 seed <- 7
 metric <- "Accuracy"
 set.seed(seed)
@@ -577,7 +598,7 @@ tunegrid <- expand.grid(.mtry = mtry)
 
 ```{r}
 rf_model <- caret::train(
-    kept_status ~ ., data = train_balanced, method = "rf", metric = metric,
+    kept_status.Kept ~ ., data = train_balanced, method = "rf", metric = metric,
     tuneGrid = tunegrid, trControl = rf_control)
 ```
 
@@ -589,7 +610,7 @@ rf_model <- caret::train(
 pred_glm <- predict(glm_model, validate)
 
 conf_mat_glm <- caret::confusionMatrix(
-    pred_glm, validate$kept_status, positive = "Missed")
+    pred_glm, validate$kept_status, positive = "0")
 
 conf_mat_glm
 
@@ -598,16 +619,18 @@ conf_mat_glm$byClass["F1"]
 
 
 
-pred_rf <-predict(rf_model, validate)
+pred_rf <- predict(rf_model, validate)
 
 caret::confusionMatrix(rf_model)
 
 conf_mat_rf <- caret::confusionMatrix(
-    pred_rf, validate$kept_status, positive = "Missed")
+    pred_rf, validate$kept_status, positive = "0")
 
 conf_mat_rf
 
 conf_mat_rf$byClass["F1"]
+
+
 
 
 ```
