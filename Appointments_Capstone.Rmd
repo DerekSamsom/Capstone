@@ -3,6 +3,7 @@ title: "Capstone Project - Predicting Patient No-Shows Using Appointment Data"
 author: "Derek Samsom"
 output:
   pdf_document: default
+  'pdf_document: default': default
 ---
 
 
@@ -19,17 +20,12 @@ Medical providers can used the missed appointment predistions by incorporating t
 
 I will start off by loading the required packages and the data. 
 
-
 ```{r message = FALSE}
 library(tidyverse)
 library(lubridate)
 library(caret)
 library(randomForest)
-library(GGally)
-```
 
-Read data and assign to `appointments`
-```{r}
 appointments <- read_csv("Final_Data.csv")
 appointments_original <- appointments
 zipcodes <- read_csv("zipcodes.csv")
@@ -322,7 +318,7 @@ appointments %>%
 
 ```
 
-patient_distance is very right-skewed, therefore NA values will be replaced with
+patient_distance is right-skewed, therefore NA values will be replaced with
 median rather than mean.
 
 ```{r}
@@ -336,7 +332,7 @@ appointments$patient_distance <- appointments$patient_distance %>%
 
 In addition to the original variables, there are several additional variables that can be calculated based on the originals.
 
-The `percent_missed` variable is the percentage of prior appointments missed, calculated by dividing the prior missed appointments by the total number of prior appointments. For new patients, this calculation will result in an error because it will be attempting to divide by zero.
+The `percent_missed` variable is the percentage of prior appointments missed, calculated by dividing the prior missed appointments by the total number of prior appointments. For new patients, this calculation will result in an error because it will be attempting to divide by zero. The errors will be replaced with zero.
 
 The variable `is_new_patient` will specify whether a patient is new, represented by a 1, or existing, represented by 0. My hypothesis is that new patients are more likely to keep their appointments, since I think it is human nature to try to give a good first impression. This is calculated by searching for appointments where `prior_missed` and `prior_kept` are both 0.
 
@@ -391,18 +387,19 @@ ggplot(
 
 ```
 
-New patients have a very high percentage of kept appointments.
+New patients have a very high percentage of kept appointments, but make up a small percentage of the total appointments.
 
 
 
 ### appt_lead_time
 
+First I will check for negative values.  Negative values suggest the appointment occured before it was scheduled, which wouldn't be possible and must represent an entry error.
 
 ```{r}
 length(which(appointments$appt_lead_time < 0))
 ```
 
-There are `r length(which(appointments$appt_lead_time < 0))` negative values, indicating observations that suggest the appointment was booked after it occurred. THis is an impossible value and must represent entry errors, but the number is small.  These will be replaced with 0.
+There are `r length(which(appointments$appt_lead_time < 0))` negative values, which will be replaced with zero.
 
 
 ```{r}
@@ -425,6 +422,16 @@ appointments %>%
 
 There is a lower proportion of missed appointments among those with the shortest lead times. This backs up my theory that shorter lead times could indicate more urgent health matters which I wouldn't expect a patient to be as likely to skip. Also, there are small bumps in the histogram around 180 and 360 days, which is probably indicitive of regular 6-month and 12-month checkups.
 
+```{r}
+appointments %>%
+    filter(appt_lead_time >= 0 & appt_lead_time < 400) %>%
+    ggplot(
+        aes(x = appt_lead_time, color = kept_status, fill = kept_status)
+    ) +
+            geom_bar(binwidth = 10, position = "fill")
+```
+
+Looking at `appt_lead_time` proportionally, the drop in missed appointments among those with the shortest lead tims is easier to see.
 
 ### county_code
 
@@ -451,15 +458,36 @@ appointments <- appointments %>%
     filter(appt_weekday != "Sunday")
 
 
-appointments$appt_weekday <- factor(appointments$appt_weekday, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
-
+appointments$appt_weekday <- factor(
+    appointments$appt_weekday,
+    levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
+)
 
 ggplot(
     appointments,
     aes(x = appt_weekday, color = kept_status, fill = kept_status)
 ) +
     geom_bar()
+
+ggplot(
+    appointments,
+    aes(x = appt_weekday, color = kept_status, fill = kept_status)
+) +
+    geom_bar(position = "fill")
 ```
+
+Most appointments occur on Tuesdays, and trail off later in the week with Friday having the fewest.  Due to the difference between the number of appointments each day, it is difficult to see the ratio of missed appoiinments each day, so I will create a proportional plot.
+
+
+```{r}
+ggplot(
+    appointments,
+    aes(x = appt_weekday, color = kept_status, fill = kept_status)
+) +
+    geom_bar(position = "fill")
+```
+
+There is a small variance in the ratio of missed appointments across the days of the week.  The highest ratio of missed appointments occurs on Monday, and drops off slightly through Wednesday before leveling off.
 
 ### weekday_scheduled
 
@@ -467,27 +495,42 @@ ggplot(
 table(appointments$weekday_scheduled)
 ```
 
+A very small percentage of the observations occur on Saturday or Sunday, so I will remove them.
+
+
 ```{r}
 appointments <- appointments %>%
     filter(weekday_scheduled != "Sunday") %>%
     filter(weekday_scheduled != "Saturday")
 
-appointments$weekday_scheduled <- factor(appointments$weekday_scheduled, levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
+appointments$weekday_scheduled <- factor(
+    appointments$weekday_scheduled,
+    levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
+)
 
 ggplot(
     appointments,
     aes(x = weekday_scheduled, fill = kept_status)
 ) +
     geom_bar()
+
+ggplot(
+    appointments,
+    aes(x = weekday_scheduled, fill = kept_status)
+) +
+    geom_bar(position = "fill")
 ```
 
+The weekday the appointments are scheduled follows a similar pattern as the weekday the appointments occur, peaking on Tuesday and trailing off as the week progresses.  However, the weekday the appointment is made has the opposite effect as the weekday the appointment occurst, with the ratio of missed appointments gradually rising throughout the week.
 
 
 
 ## Modeling
 
+
 ### Create Modeling Data
 
+I will select the data to be used in modeling and assign to `model_data`, then convert the categorical information to dummy variables to help with the modelling. 
 ```{r}
 
 model_data <- appointments %>%
@@ -510,33 +553,53 @@ dummy_vars <- caret::dummyVars(~ ., data = model_data)
 model_data_dummy <- data.frame(predict(dummy_vars, newdata = model_data))
 ```
 
+The next step is to look for linear combinations, highly correlated variables, and variables with near zero variance.  These variables add complexity to the model without providing any significant information, so I will remove them to help the model work better and more efficiently.
+
+First I will look for linear combinations.
+
 ```{r}
 linear_combos <- caret::findLinearCombos(model_data_dummy)
-linear_combos$remove
-lin_combo_index <- linear_combos$remove
 
-model_data_dummy <- model_data_dummy[,-linear_combos$remove]
+colnames(model_data_dummy[, linear_combos$remove])
 
+model_data_dummy <- model_data_dummy[, -linear_combos$remove]
+```
+
+
+Next I will check for highly correlated variables.
+```{r}
 
 cor_matrix <- cor(model_data_dummy)
 high_cor <- as.data.frame(which(abs(cor_matrix) > 0.90, arr.ind = TRUE))
-index <- high_cor %>% filter(row != col)
+cm_index <- high_cor %>% filter(row != col)
+
+cor_matrix[cm_index[, 1], cm_index[, 2]]
 
 
-cor_matrix[index[, 1], index[, 2]]
+cbind(
+    cm_index[, 1],
+    colnames(model_data_dummy[cm_index[,1]]),
+    cm_index[,2],
+    colnames(model_data_dummy[cm_index[,2]]))
+```
 
-colnames(model_data_dummy[index[,1], index[, 2]])
+Creating dummy variables for `kept_status` duplicated the information as there are only two possible values, therefore I will remove the dummy variable `kept_status.Missed`.
+
+Most cases of `patient_gender` are `male` or `female`, with few values of `other` and `unknown`, leading to a high negative correlation between male and female.  Similary, most cases of `provider_specialty` are `A` or `B`.  Due to the dominance of two possible values, there is a high correlation between them and one will be eliminated.  I will eliminate the dummy variables `patient_gender.Male` and `provider_specialty.B`.
+
+```{r}
+model_data_dummy <- model_data_dummy[,-c(2, 6)]
+```
 
 
-model_data_dummy <- model_data_dummy[,-c(2, 6, 11)]
+Finally, I will check for variables with a variance near zero, and remove them.
 
-model_data_dummy$kept_status.Kept <- as.factor(model_data_dummy$kept_status.Kept)
-
+```{r}
 near_zero_var <- caret::nearZeroVar(model_data_dummy)
-model_data_dummy <- model_data_dummy[,-near_zero_var]
 
+colnames(model_data_dummy[, near_zero_var])
 
-
+model_data_dummy <- model_data_dummy[, -near_zero_var]
 ```
 
 
@@ -544,26 +607,37 @@ model_data_dummy <- model_data_dummy[,-near_zero_var]
 
 The data will be divided into three sets: train, validate, and test. I will use 60% of the tata for training, and 20% each for validation and test.
 
-Because the data is sorted by date, I want to use the most recent data for the test data, the next oldest for validation, and the oldest for training. Since I am trying to predict future appointments, testing on the most recent data will result in the best measure of the model's performance.
+Because the data is sorted by date, I want to use the most recent data for the test data, the next oldest for validation, and the oldest for training. Since I am trying to predict future appointments, testing on the most recent data will result in the best measure of the model's performance on future appointments.
 
 ```{r}
+model_data_dummy$kept_status.Kept <- as.factor(model_data_dummy$kept_status.Kept)
+model_data_dummy$kept_status.Kept <- fct_recode(
+    model_data_dummy$kept_status.Kept, "Kept" = "1", "Missed" = "0")
 
-# check out caret::downSample
 train <- model_data_dummy[1:205660,]
 validate <- model_data_dummy[205661:274200,]
 test <- model_data_dummy[274201:nrow(model_data_dummy),]
 table(train$kept_status.Kept)
 train_balance_subset <- train[168750:205660,]
 table(train_balance_subset$kept_status.Kept)
-train_kept <- train_balance_subset[train_balance_subset$kept_status.Kept == 1,]
-train_missed <- train[train$kept_status.Kept == 0,]
+train_kept <- train_balance_subset[train_balance_subset$kept_status.Kept == "Kept",]
+train_missed <- train[train$kept_status.Kept == "Missed",]
 train_balanced <- rbind(train_kept, train_missed)
 table(train_balanced$kept_status.Kept)
 
 ```
 
+### Set Up Model Parameters
 
-###need to fix negative appt lead time
+```{r}
+rf_control <- caret::trainControl(method = "cv", number = 2, classProbs = TRUE)
+seed <- 7
+metric <- "Accuracy"
+set.seed(seed)
+mtry <- 3
+tunegrid <- expand.grid(.mtry = mtry)
+```
+
 
 ### Logistic Regression Model
 
@@ -586,16 +660,6 @@ summary(glm_model)
 
 
 
-Using caret Package
-```{r}
-rf_control <- caret::trainControl(method = "cv", number = 2, classProbs = FALSE)
-seed <- 7
-metric <- "Accuracy"
-set.seed(seed)
-mtry <- 3
-tunegrid <- expand.grid(.mtry = mtry)
-```
-
 ```{r}
 rf_model <- caret::train(
     kept_status.Kept ~ ., data = train_balanced, method = "rf", metric = metric,
@@ -610,7 +674,7 @@ rf_model <- caret::train(
 pred_glm <- predict(glm_model, validate)
 
 conf_mat_glm <- caret::confusionMatrix(
-    pred_glm, validate$kept_status, positive = "0")
+    pred_glm, validate$kept_status, positive = "Missed")
 
 conf_mat_glm
 
@@ -624,7 +688,7 @@ pred_rf <- predict(rf_model, validate)
 caret::confusionMatrix(rf_model)
 
 conf_mat_rf <- caret::confusionMatrix(
-    pred_rf, validate$kept_status, positive = "0")
+    pred_rf, validate$kept_status, positive = "Missed")
 
 conf_mat_rf
 
@@ -632,12 +696,5 @@ conf_mat_rf$byClass["F1"]
 
 
 
-
 ```
-
-
-
-
-
-
 
