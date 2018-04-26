@@ -8,13 +8,14 @@ output:
 
 
 
-Missed medical appointments are a major problem in the medical industry, resulting in lost revenue. Medical providers can over-book appointments to try to minimize the lost revenue, but without any way to predict the probability of an appointment being missed, there will still be times where more or fewer patients show up at a given time than expected. The result will be that lost revenue will be reduced but not eliminated, as there will still be times that more appointments are missed than expected. There  will aslo be times more apppointments show up than expected, which can overwhelm staff and resources and affect the level of patient care.
+Missed medical appointments are a major problem in the medical industry, resulting in lost revenue. Medical providers can over-book appointments to try to minimize the lost revenue, but without any way to predict the probability of an appointment being missed, there will be times where more or fewer patients show up at a given time than expected. The result will be that lost revenue will be reduced but not eliminated, as there will still be times that more appointments are missed than expected. There  will aslo be times more apppointments show up than expected, which can overwhelm staff and resources and affect the level of patient care. 
 
-This  project is a classification problem that will explore the prediction of whether a medical appointment will be missed, and its probability of being kept or missed. The prediction error will result in  times where there are too many or too few patients at a given time. The main goal in the prediction will be to minimize the error, as this will reduce instances of having more or fewer patients that desired.
+This  project is a classification problem that will explore the prediction of whether a medical appointment will be missed, and its probability of being kept or missed. The goal of this project is to minimize the prediction error of missed appointments, as the error results in times where there are too many or too few patients at a given time. This is important to the client because it reduces the revenue loss caused by missed appontments in a way that reduces the undesired consequences of overbooking.
 
-There are countless reasons and circumstances that can lead someone to miss an appointment, such as a last minute work meeting or a family emergency, that aren't directly captured in the data and are impossible to know in advance. Missed appointments can only be predicted based on indirect factors that are known, such as past history as demographics. Because of this, there will be a level of error that cannot be eliminated, however, any reduction in error compared to having no predictive model at all is still beneficial.
+There are countless reasons and circumstances that can lead someone to miss an appointment, such as a last minute work meeting or a family emergency, that aren't directly captured in the data and are impossible to know in advance of future appointments. Missed appointments can only be predicted based on indirect factors that are known, such as patient history and demographics. Because of this, there will be a level of error that cannot be eliminated, however, any reduction in error compared to having no predictive model at all is still beneficial as it allows more overbooking to be done with fewer negative consequences.
 
-Medical providers can used the missed appointment predistions by incorporating them into their booking methods and systems. The methods used in booking will have to consider the implications of the inherent prediction errors and balance the risk the errors represent: too many patients leading to staff/resource shortage, and too few patients leading to lost revenue.  The methods of implementing the use of missed appointentment predictions into an appointment booking system are client-specific ant not included in the scope of this project, which is limited to minimizing the error while predicting the probability that an appointment will be missed or kept.
+Medical providers can use the missed appointment predictions by incorporating them into their booking methods and systems. The methods used in booking will have to consider the implications of the inherent prediction errors and balance the risk the errors represent: too many patients leading to staff/resource shortage, and too few patients leading to lost revenue.  The methods of implementing the use of missed appointentment predictions into a booking system are client-specific and not included in the scope of this project, which is limited to minimizing the error while predicting the classification and associated probability that an appointment will be missed or kept.
+
 
 
 
@@ -24,7 +25,6 @@ I will start off by loading the required packages and the data.
 library(tidyverse)
 library(lubridate)
 library(caret)
-library(randomForest)
 
 appointments <- read_csv("Final_Data.csv")
 appointments_original <- appointments
@@ -33,7 +33,7 @@ zipcodes <- read_csv("zipcodes.csv")
 
 The raw data, which has been named `appointments`,  contains information on `r nrow(appointments)` past appointments, pre-sorted by the date and time of appointment.  The dependended variable, `kept_status`, shows whether the appintment was be kept or missed.
 
-There is no field that can be used to identify a specific patients in the data set. A patient may have had more than one appointment during the time-period represented in the data, meaning that one individual patient may make up one  or multiple observations. If there was a patient ID field, it would allow the data to be grouped by patient and give the option of organizing the data by patient rather than by appointment. 
+There is no field that can be used to identify a specific patient in the data set. A patient may have had more than one appointment during the time-period represented in the data, meaning that one individual patient may make up one  or multiple observations. If there was a patient ID field, it would allow the data to be grouped by patient and give the option of organizing the data by patient rather than by appointment. 
 
 A secondary data set, `zipcodes`, has information about the county the offices are located in. This will be used to see if the location can help predict whether an appointment will be missed. The county names are converted to a 2-letter code for confidentiality.
 
@@ -114,13 +114,13 @@ Next I want to check the data to see if there are any missing values that could 
 map_dbl(appointments, ~sum(is.na(.)))
 ```
 
-One variable,  `patient_distance` has  `r sum(is.na(appointments$patient_distance))` missing value. This is fairly minor and will be evaluated later on when exploring the variable further. 
+One variable,  `patient_distance` has  `r sum(is.na(appointments$patient_distance))` missing value. This is fairly minor considering the size of the data set and will be evaluated later on when exploring the variable further. 
 
 
 
 ### patient_age
 
-I expected missed appointments to have to vary across age ranges. Perhaps older patients have fewer commitments with kids or work, and make their appointments more regularly, or perhaps younger adults might skip more appointments because they aren't as critical? I will break the data into age groups to make the plot simpler to evaluate. 
+I expected missed appointments to vary across age ranges. Perhaps older patients have fewer commitments with children or work, and make their appointments more regularly, or perhaps younger adults might skip more appointments because they aren't as critical. I will break the data into age groups to make the plot simpler to evaluate. 
 
 
 There are a small number of observations where the age is higher than plausible. Therefore, the observations greater than age 110 will be removed from the data.
@@ -145,7 +145,7 @@ ggplot(
 ```
 
 
-Missed appointments are highest with young adults, and decrease with older and younger patients.
+Missed appointments are highest with young adults, and decrease with older patients, which follows a similar pattern to what I expcted. 
 
 
 
@@ -171,14 +171,14 @@ ggplot(
 
 ```
 
-There is a minor difference between billing types. DMAP has a higher proportion
+There is a fairly small yet significant difference between billing types. DMAP has a higher proportion
 of missed appointments than commercial.
 
 
 
 ### appt_datetime
 
-For the variable `appt_datetime`, I will create an `hour` variable to see the variation in missed appointments by hour of day.
+For the variable `appt_datetime`, I will create an `hour` variable to see the variation in missed appointments by hour of day.  Thre are many ways the time of day can have an effect, such as rush hour traffic in the morning and afternoon causing more missed appointments, whereas mid-day appointments could be more likely to be missed by work factors.
 
 ```{r}
 appointments <- appointments %>%
@@ -202,7 +202,7 @@ ggplot(
     scale_x_continuous(breaks = seq(8, 17, 1))
 ```
 
-There is a decline in the total number of missed appointments as both the morning and afternoon period progress, however, there are fewer appointments towars the end of the two periods. 
+There is a decline in the total number of missed appointments as both the morning and afternoon period progress, however, there are fewer appointments towards the end of the two periods.  The ratio of missed appointments is hard to read, so I will create a proportional plot to see if it shows any trends. 
 
 
 ```{r}
@@ -222,8 +222,10 @@ Proportionally more appointments are missed at the beginning and end of the typi
 ```{r}
 table(appointments$remind_call_result)
 ```
-Low counts of "Answered - Cancelled", "Answered - Reschedule", "Busy",
+
+There are relatively few instances of "Answered - Cancelled", "Answered - Reschedule", "Busy",
 and "No Answer"
+
 ```{r}
 ggplot(
     appointments,
@@ -233,18 +235,22 @@ ggplot(
     theme(axis.text.x = element_text(size = 8, angle = 45,hjust = 1, vjust = 1))
 ```
 
-~65% of appointments with "Answered - Cancelled" and ~35% with
-"Answered-Reschedule" still kept their appointments, however, very few
- observations in these categories.
- 
+Reminder call responses of "Answered - Confirmed", "Left Message", and "Not Called"  have the lowest ratios of missed appointments. This seems logical  although I would not expect "Not Called" to have as low of a rate, since it doesn't seem like it is indicating one way or another.  The best explanation for the low miss rate is a bias in choosing who doesn't need a reminder call.
 
+Responses of "Answered - No Response", "Busy", "Failed", and "No Answer" have average or higher rates of missed appointments, which makes sense as I would rate these responses as neutral to slightly negative.
+
+Responses "Answered - Cancelled" and "Answered - Reschedule" have the highest rates of about 35% and 65%, respectively. It's not surprising that these have the highest missed rates, but I would expect them to be higher. Perhaps the patients wanted to cancel or reschdule, but circumstances changed and they ultimately decided to come. 
 
 ### provider_specialty 
+
+THe variable `provider_specialty` indicates what the medical staff assigned to the appointment specializes in, but is encoded for confidentiality. 
 
 ```{r}
 table(appointments$provider_specialty)
 ```
+
 Most observations are specialty A and B. Specialties E, F, and G have very few observations and will be grouped as "Other".
+
 ```{r}
 appointments$provider_specialty <- appointments$provider_specialty %>%
     fct_collapse(Other = c("E", "F", "G"))
@@ -261,11 +267,10 @@ ggplot(
     appointments,
     aes(x = provider_specialty, fill = kept_status)
 ) +
-    geom_bar(position = "fill") +
-    theme(axis.text.x = element_text(size = 7))
+    geom_bar(position = "fill") 
 ```
 
-
+The first plot shows that most appointmetns have a provider specialty of "A" or "B".  The second plot shows that specialties "C" and "D" have the lowest rates of missed appointments. Without knowing the details of the specialties, my best hypothesis is that specialties "C" and "D" could be for more critical but less common types of appointments, leading to fewer misses.
 
 
 ### appt_length
@@ -279,8 +284,9 @@ appointments %>%
     ) +
             geom_histogram(binwidth = 10)
 ```
-Most Appointments are 60 minutes long. 30-minute appointments are next most
-common.
+
+Most Appointments are 60 minutes long. 30-minute appointments are the next most
+common. I'll group them as "30 Min", "60 Min", and the rest as "Other", and take a look at the differences.
 
 
 ```{r}
@@ -306,7 +312,11 @@ ggplot(
 
 ```
 
+Longer appointments are more likely to be missed. This could be because a patient is more inclined to go to a shorter appointment, and shorter appointments are less likely to be impacted by scheduling conflicts.
+
+
 ### patient_distance
+
 ```{r}
 appointments %>%
     filter(patient_distance < 50) %>%
@@ -314,12 +324,15 @@ appointments %>%
         aes(x = patient_distance, color = kept_status, fill = kept_status)
     ) +
             geom_histogram(binwidth = 5)
-
-
+appointments %>%
+    filter(patient_distance < 50) %>%
+    ggplot(
+        aes(x = patient_distance, color = kept_status, fill = kept_status)
+    ) +
+            geom_bar(position = "fill", binwidth = 5)
 ```
 
-patient_distance is right-skewed, therefore NA values will be replaced with
-median rather than mean.
+The variable `patient_distance` is the only one with missing values,  which will be replaced with median rather than mean since it is a right-skewed distribution. 
 
 ```{r}
 appointments$patient_distance <- appointments$patient_distance %>%
@@ -328,50 +341,65 @@ appointments$patient_distance <- appointments$patient_distance %>%
 ```
 
 
+
 ### New Variables
 
-In addition to the original variables, there are several additional variables that can be calculated based on the originals.
+In addition to the original variables, there are several additional variables that can be calculated. Five new variables will be created, summarized below:
 
-The `percent_missed` variable is the percentage of prior appointments missed, calculated by dividing the prior missed appointments by the total number of prior appointments. For new patients, this calculation will result in an error because it will be attempting to divide by zero. The errors will be replaced with zero.
+The `prior_percent_missed` variable is the percentage of prior appointments missed, calculated by dividing the prior missed appointments by the total number of prior appointments. For new patients, this calculation will result in an error because it will be attempting to divide by zero. The errors will be replaced with zero.
 
 The variable `is_new_patient` will specify whether a patient is new, represented by a 1, or existing, represented by 0. My hypothesis is that new patients are more likely to keep their appointments, since I think it is human nature to try to give a good first impression. This is calculated by searching for appointments where `prior_missed` and `prior_kept` are both 0.
 
-The variable `appt_lead_time` will calculate how far in advance an appointment was booked. This is calculated by taking the difference between `date_scheduled` and `appt_date`. If people are more likely to forget appointments booked farther in advance, or they are more likely to be for less urgent preventative care than last minute appointnemtns, this will pick that up.
+The variable `appt_lead_time` will calculate how far in advance an appointment was booked. This is calculated by taking the difference between `date_scheduled` and `appt_date`. If people are more likely to forget appointments booked farther in advance, or they are more likely to be for less urgent preventative care than last-minute appointments, this will pick that up.
 
 The variable `appt_weekday` is the day of the week the appointments occurs, and `weekday_scheduled` is the date the appointment was booked.  
 
 
 ```{r}
 appointments <- appointments %>%
-    mutate(percent_missed = prior_missed / (prior_missed + prior_kept)) %>%
+    mutate(
+        prior_percent_missed = prior_missed / (prior_missed + prior_kept)) %>%
     mutate(
         is_new_patient = ifelse(prior_missed == 0 & prior_kept == 0, 1, 0)) %>%
     mutate(appt_lead_time = date(appt_datetime) - date(date_scheduled)) %>% 
     mutate(appt_weekday = strftime(appt_datetime, "%A")) %>%
     mutate(weekday_scheduled = strftime(date_scheduled, "%A"))
 
-appointments$percent_missed <- as.integer(appointments$percent_missed * 100)
-appointments$percent_missed <- appointments$percent_missed %>%
+
+appointments$prior_percent_missed <- appointments$prior_percent_missed %>%
     tidyr::replace_na(0)
 ```
 
 
-Add `county_code` from zipcode data.
+In addition to the claculated variables, the variable `county_code` will be brought in from the zipcode dataset.  This will allow differences between geographical areas to be modeled.  For example, a more populous county might have more traffic related missed appointments, and a county more prone to inclement weather could have more weather related missed appointments.
+
 ```{r}
 appointments <- dplyr::left_join(appointments, zipcodes, by = "office_zip")
 ```
 
 
-### percent_missed
+### prior_percent_missed
+
+This is expected to be an important variable, because regardless of the reason a patient missed appointments in the past, those same reasons are probably more likely to occur on future appointments. For example, a patient that has missed appointments in the past because they have a very hectic schedule, will be more likely to miss future appointments due to the same hectic schedule.
 
 ```{r}
+prior_missed_labels <- c("0 - 10 %", "10 - 20 %", "20 - 30 %", "30 - 40 %", "40 - 100 %")
+prior_missed_breaks <- c(-.01, 0.10, 0.20, 0.30, 0.40, 1.01)
+
+appointments <- appointments %>%
+    mutate(
+        prior_missed_category = cut(
+            prior_percent_missed,
+            breaks = prior_missed_breaks,
+            labels = prior_missed_labels))
+
 ggplot(
-    data = appointments,
-    aes(x = kept_status, y = percent_missed, col = kept_status)
+    appointments,
+    aes(x = prior_missed_category, color = kept_status, fill = kept_status)
 ) +
-    geom_boxplot()
-    
+    geom_bar()
 ```
+As expected, past ratio of missed appointments is a strong predictor of future missed appointments. Appointments where the prior rate is 0 - 10% overwhelmingly kept their appointments.
 
 
 ### is_new_patient
@@ -393,7 +421,7 @@ New patients have a very high percentage of kept appointments, but make up a sma
 
 ### appt_lead_time
 
-First I will check for negative values.  Negative values suggest the appointment occured before it was scheduled, which wouldn't be possible and must represent an entry error.
+First I will check for negative values.  Negative values suggest the appointment occured before it was booked, which wouldn't be possible and must represent an entry error.
 
 ```{r}
 length(which(appointments$appt_lead_time < 0))
@@ -403,7 +431,8 @@ There are `r length(which(appointments$appt_lead_time < 0))` negative values, wh
 
 
 ```{r}
-appointments$appt_lead_time <- ifelse(appointments$appt_lead_time < 0, 0, appointments$appt_lead_time)
+appointments$appt_lead_time <- ifelse(
+    appointments$appt_lead_time < 0, 0, appointments$appt_lead_time)
 
 appointments %>%
     filter(appt_lead_time >= 0 & appt_lead_time < 400) %>%
@@ -411,16 +440,9 @@ appointments %>%
         aes(x = appt_lead_time, color = kept_status, fill = kept_status)
     ) +
             geom_histogram(binwidth = 10)
-
-appointments %>%
-    filter(appt_lead_time >= 0 & appt_lead_time < 400) %>%
-    ggplot(
-        aes(x = appt_lead_time, color = kept_status, fill = kept_status)
-    ) +
-            geom_bar(binwidth = 10, position = "fill")
 ```
 
-There is a lower proportion of missed appointments among those with the shortest lead times. This backs up my theory that shorter lead times could indicate more urgent health matters which I wouldn't expect a patient to be as likely to skip. Also, there are small bumps in the histogram around 180 and 360 days, which is probably indicitive of regular 6-month and 12-month checkups.
+There is a lower proportion of missed appointments among those with the shortest lead times. This backs up my theory that shorter lead times could indicate more urgent health matters which have a higher incentive to keep. Also, there are small bumps in the histogram around 180 and 360 days, which is probably indicitive of regular 6-month and 12-month checkups.
 
 ```{r}
 appointments %>%
@@ -428,10 +450,10 @@ appointments %>%
     ggplot(
         aes(x = appt_lead_time, color = kept_status, fill = kept_status)
     ) +
-            geom_bar(binwidth = 10, position = "fill")
+            geom_histogram(binwidth = 10, position = "fill")
 ```
 
-Looking at `appt_lead_time` proportionally, the drop in missed appointments among those with the shortest lead tims is easier to see.
+Looking at `appt_lead_time` proportionally, the drop in missed appointments among those with the shortest lead times is easier to see.
 
 ### county_code
 
@@ -443,6 +465,7 @@ ggplot(
     geom_bar(position = "fill")
 ```
 
+**
 
 ### appt_weekday
 
@@ -460,20 +483,13 @@ appointments <- appointments %>%
 
 appointments$appt_weekday <- factor(
     appointments$appt_weekday,
-    levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
-)
+    levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
 
 ggplot(
     appointments,
     aes(x = appt_weekday, color = kept_status, fill = kept_status)
 ) +
     geom_bar()
-
-ggplot(
-    appointments,
-    aes(x = appt_weekday, color = kept_status, fill = kept_status)
-) +
-    geom_bar(position = "fill")
 ```
 
 Most appointments occur on Tuesdays, and trail off later in the week with Friday having the fewest.  Due to the difference between the number of appointments each day, it is difficult to see the ratio of missed appoiinments each day, so I will create a proportional plot.
@@ -505,8 +521,7 @@ appointments <- appointments %>%
 
 appointments$weekday_scheduled <- factor(
     appointments$weekday_scheduled,
-    levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
-)
+    levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
 
 ggplot(
     appointments,
@@ -521,7 +536,7 @@ ggplot(
     geom_bar(position = "fill")
 ```
 
-The weekday the appointments are scheduled follows a similar pattern as the weekday the appointments occur, peaking on Tuesday and trailing off as the week progresses.  However, the weekday the appointment is made has the opposite effect as the weekday the appointment occurst, with the ratio of missed appointments gradually rising throughout the week.
+The weekday the appointments are scheduled follows a similar pattern as the weekday the appointments occur, peaking on Tuesday and trailing off as the week progresses. However, the weekday the appointment is initially booked has the opposite effect as the weekday the appointment occurs, with the ratio of missed appointments gradually rising throughout the week.  I'm not sure what could cause this, but perhaps people who call in early in the week after a weekend o
 
 
 
@@ -535,15 +550,15 @@ I will select the data to be used in modeling and assign to `model_data`, then c
 
 model_data <- appointments %>%
     select(
-        kept_status, appt_length, patient_age, patient_gender, billing_type, 
+        length_group, patient_age, patient_gender, billing_type, 
         patient_distance, provider_specialty, remind_call_result, hour,
-        percent_missed, is_new_patient, appt_lead_time, appt_weekday,
+        prior_percent_missed, appt_lead_time, appt_weekday,
         weekday_scheduled, county_code)
 
 
 factor_columns <- c(
-    "kept_status", "patient_gender", "billing_type",
-    "provider_specialty", "remind_call_result", "hour", "is_new_patient",
+    "length_group", "patient_gender", "billing_type",
+    "provider_specialty", "remind_call_result", "hour",
     "appt_weekday", "weekday_scheduled",
     "county_code")
 model_data[factor_columns] <- map(model_data[factor_columns], factor)
@@ -583,12 +598,10 @@ cbind(
     colnames(model_data_dummy[cm_index[,2]]))
 ```
 
-Creating dummy variables for `kept_status` duplicated the information as there are only two possible values, therefore I will remove the dummy variable `kept_status.Missed`.
-
-Most cases of `patient_gender` are `male` or `female`, with few values of `other` and `unknown`, leading to a high negative correlation between male and female.  Similary, most cases of `provider_specialty` are `A` or `B`.  Due to the dominance of two possible values, there is a high correlation between them and one will be eliminated.  I will eliminate the dummy variables `patient_gender.Male` and `provider_specialty.B`.
+Most cases of `patient_gender` are `male` or `female`, with few values of `other` and `unknown`, leading to a high negative correlation between male and female.  Similary, most cases of `provider_specialty` are `A` or `B`.  Due to the dominance of two possible values, there is a high correlation between them and one of each pair will be eliminated.  I will eliminate the dummy variables `patient_gender.Male` and `provider_specialty.B`.
 
 ```{r}
-model_data_dummy <- model_data_dummy[,-c(2, 6)]
+model_data_dummy <- model_data_dummy[,-c(6, 11)]
 ```
 
 
@@ -603,6 +616,16 @@ model_data_dummy <- model_data_dummy[, -near_zero_var]
 ```
 
 
+Now that the dummy variables are created and removed when necassary, I will add back the dependent variable `kept_status`.
+
+```{r}
+model_data_dummy <- cbind(appointments[, 1], model_data_dummy)
+
+model_data_dummy$kept_status <- as.factor(model_data_dummy$kept_status)
+
+```
+
+
 ### Divide model_data into train, validate, and test sets
 
 The data will be divided into three sets: train, validate, and test. I will use 60% of the tata for training, and 20% each for validation and test.
@@ -610,27 +633,27 @@ The data will be divided into three sets: train, validate, and test. I will use 
 Because the data is sorted by date, I want to use the most recent data for the test data, the next oldest for validation, and the oldest for training. Since I am trying to predict future appointments, testing on the most recent data will result in the best measure of the model's performance on future appointments.
 
 ```{r}
-model_data_dummy$kept_status.Kept <- as.factor(model_data_dummy$kept_status.Kept)
-model_data_dummy$kept_status.Kept <- fct_recode(
-    model_data_dummy$kept_status.Kept, "Kept" = "1", "Missed" = "0")
-
 train <- model_data_dummy[1:205660,]
 validate <- model_data_dummy[205661:274200,]
 test <- model_data_dummy[274201:nrow(model_data_dummy),]
-table(train$kept_status.Kept)
+table(train$kept_status)
 train_balance_subset <- train[168750:205660,]
-table(train_balance_subset$kept_status.Kept)
-train_kept <- train_balance_subset[train_balance_subset$kept_status.Kept == "Kept",]
-train_missed <- train[train$kept_status.Kept == "Missed",]
+table(train_balance_subset$kept_status)
+train_kept <- train_balance_subset[train_balance_subset$kept_status == "Kept",]
+train_missed <- train[train$kept_status == "Missed",]
 train_balanced <- rbind(train_kept, train_missed)
-table(train_balanced$kept_status.Kept)
+table(train_balanced$kept_status)
 
 ```
+
+The models chosen for the missed appointment predictions are glm and random forest, which will both be used with the caret package.  The glm model is chosen because this is a binary classification problem, where it is also useful to predict the probabilities of each outcome, and the glm will is well suited to this task.  The probabilities of each class will be useful for a client's implementation of the prediction because it allows the individual probabilities to be combined in a given time slot to give an the expected probability for each possible number of mis
+
+**Explain why random forest is being used
 
 ### Set Up Model Parameters
 
 ```{r}
-rf_control <- caret::trainControl(method = "cv", number = 2, classProbs = TRUE)
+control <- caret::trainControl(method = "cv", number = 2, classProbs = TRUE)
 seed <- 7
 metric <- "Accuracy"
 set.seed(seed)
@@ -642,13 +665,11 @@ tunegrid <- expand.grid(.mtry = mtry)
 ### Logistic Regression Model
 
 ```{r}
-glm_control <- caret::trainControl(method = "none")
-
 glm_model <- caret::train(
-    kept_status.Kept ~ .,
+    kept_status ~ .,
     data = train_balanced,
     method = "glm",
-    trControl = glm_control
+    trControl = control
 )
 
 summary(glm_model)
@@ -662,12 +683,12 @@ summary(glm_model)
 
 ```{r}
 rf_model <- caret::train(
-    kept_status.Kept ~ ., data = train_balanced, method = "rf", metric = metric,
-    tuneGrid = tunegrid, trControl = rf_control)
+    kept_status ~ ., data = train_balanced, method = "rf", metric = metric,
+    tuneGrid = tunegrid, trControl = control)
 ```
 
 
-### Model Comparison
+### Model Selection
 
 ```{r}
 
@@ -685,8 +706,6 @@ conf_mat_glm$byClass["F1"]
 
 pred_rf <- predict(rf_model, validate)
 
-caret::confusionMatrix(rf_model)
-
 conf_mat_rf <- caret::confusionMatrix(
     pred_rf, validate$kept_status, positive = "Missed")
 
@@ -698,3 +717,44 @@ conf_mat_rf$byClass["F1"]
 
 ```
 
+
+
+I will use the positive predictive value (where positive is missed appointments) and the F1 scores to select the best model.  Predictiing the missed appointments is more difficult since it is the minority class, and this is where I am most interested in reducing the error.  The missed appointments were designated the positive class, therefore the positive predictive value is the accuracy of the model in predicting the missed appointments. The F1 score will be looked at rather than accuracy, since the F1 is a harmonic average that is a better metric due to the imbalance.
+
+Looking at the F1 scores, the random forest model outperforms the glm model, with a score of `r conf_mat_rf$byClass["F1"]` vs the glm model with a score of `r conf_mat_glm$byClass["F1"]`.  
+
+The glm model has a positive predictive value of 0.3475, and the random forest model has a positive predictive value of ...
+
+The random forest outperforms the glm model in both the F1 and positive predictive value metric.  
+
+### Testing Expected Model Performance 
+
+add code and desciption here
+
+* Paragraph about the results
+
+* speak about the performance overall and how i view it when considering the nature of the problem.  eg the model is still wrong over half the time when it predicts a missed appointment, yet with no model, predicting a missed appointment would be incorrect 86 percent of the time.
+
+
+### Recommendations
+
+*3 concrete recommendations.
+
+*Speak about additional improvements that could be made. further analysis can be done on combining the probabilities of multiple appointments and determining the error rate of the combined probability.  could be interesting since the error goes both ways, multiple errors could somewhat offset each other.
+
+*paragraph about the class predictions
+```{r eval = FALSE}
+rf_pred_probs <- predict(rf_model, newdata = validate, type = "prob")
+rf_probs <- cbind(validate$kept_status, rf_pred_probs)
+head(rf_probs)
+```
+
+### Conclusion
+
+final summary - client-benefit centric 
+
+
+
+
+
+control <- caret::trainControl(method = "none")
