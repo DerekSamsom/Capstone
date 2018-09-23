@@ -16,7 +16,7 @@ Appointments_Presentation.pptx - Final Capstone Presentation
 
 Capstone.Rproj - R Project file for Capstone Project
 
-Capstone_Project_Ideas.Rmd - Three initial ideas for Capstone Project
+Capstone_Project_Ideas.pdf - Three initial ideas for Capstone Project
 
 Capstone_Proposal.pdf - Project Proposal
 
